@@ -272,12 +272,10 @@
             align-items: center;
             gap: 8px;
             position: relative;
-            flex-wrap: wrap;
         }
 
         .message-input {
-            flex: 1 1 160px;
-            min-width: 140px;
+            flex: 1;
             background: #1c1c1e;
             border: 0.5px solid #3a3a3c;
             border-radius: 30px;
@@ -329,7 +327,15 @@
             flex-shrink: 0;
         }
 
-        .emoji-button:hover, .photo-button:hover {
+        /* Группируем кнопки справа */
+        .right-buttons {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+            margin-left: 4px;
+        }
+
+        .emoji-button:hover, .photo-button:hover, .mic-button:hover {
             background: #2c2c2e;
             transform: scale(0.96);
         }
@@ -786,26 +792,44 @@
             margin-bottom: 8px;
         }
 
-        /* Оптимизация для очень маленьких экранов */
-        @media (max-width: 380px) {
+        /* Оптимизация для маленьких экранов */
+        @media (max-width: 480px) {
             .input-area {
                 padding: 10px 12px;
                 gap: 6px;
             }
     
             .message-input {
-                min-width: 120px;
                 padding: 10px 16px;
                 font-size: 15px;
             }
     
-            .send-button, 
+            .send-button,
             .emoji-button, 
             .photo-button, 
             .mic-button {
                 width: 40px;
                 height: 40px;
                 font-size: 20px;
+            }
+    
+            .right-buttons {
+                gap: 3px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .emoji-button, 
+            .photo-button, 
+            .mic-button,
+            .send-button {
+                width: 38px;
+                height: 38px;
+                font-size: 18px;
+            }
+    
+            .message-input {
+                padding: 9px 14px;
             }
         }
     </style>
@@ -868,12 +892,14 @@
         <div class="messages-container" id="messageContainer"></div>
 
         <div class="input-area">
-            <button class="emoji-button" id="emojiBtn">😊</button>
-            <button class="photo-button" id="photoBtn">📷</button>
-            <input type="file" id="photoInput" accept="image/*" style="display: none;">
             <input type="text" class="message-input" id="messageInput" placeholder="Написать в Там-Сям..." autofocus>
-            <button class="mic-button" id="micBtn">🎤</button>
-            <button class="send-button" id="sendBtn">➤</button>
+            <div class="right-buttons">
+                <button class="emoji-button" id="emojiBtn">😊</button>
+                <button class="photo-button" id="photoBtn">📷</button>
+                <button class="mic-button" id="micBtn">🎤</button>
+                <button class="send-button" id="sendBtn">➤</button>
+            </div>
+            <input type="file" id="photoInput" accept="image/*" style="display: none;">
         </div>
         <div id="recordingIndicator" class="recording-indicator hidden">
             <span>🎤 Запись...</span>
