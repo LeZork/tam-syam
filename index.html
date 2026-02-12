@@ -875,6 +875,11 @@
 
         /* Оптимизация для маленьких экранов */
         @media (max-width: 480px) {
+            .input-area {
+                padding: 10px 12px;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom, 10px));
+            }
+
             .attach-button,
             .send-button,
             .emoji-button {
@@ -888,6 +893,7 @@
                 right: 12px;
                 width: auto;
                 min-width: auto;
+                bottom: calc(80px + env(safe-area-inset-bottom, 0px));
             }
         }
 
