@@ -758,11 +758,15 @@
             <button class="mic-button" id="micBtn">🎤</button>
             <button class="send-button" id="sendBtn">➤</button>
         </div>
+        <div id="recordingIndicator" class="recording-indicator hidden">
+            <span>🎤 Запись...</span>
+            <span id="recordingTimer" class="recording-timer">0:00</span>
+            <button id="cancelRecordingBtn" class="recording-cancel">✕</button>
+        </div>
         <div class="footer-note">
             <span>●</span> @sadzorax <span>●</span>
         </div>
     </div>
-
     <script>
         (function() {
             // ==========  SUPABASE ==========
@@ -783,6 +787,13 @@
             let hasJoinedBefore = false;
             let authCodeTimer = null;
 
+            // ==========  ПЕРЕМЕННЫЕ ДЛЯ ГОЛОСА ==========
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let recordingStartTime = null;
+            let recordingTimerInterval = null;
+            let currentlyPlaying = null;
+
             // ==========  ЭЛЕМЕНТЫ DOM ==========
             const loginPrompt = document.getElementById('loginPrompt');
             const chatApp = document.getElementById('chatApp');
@@ -798,6 +809,11 @@
             const onlineCountBadge = document.getElementById('onlineCountBadge');
             const onlineUsersList = document.getElementById('onlineUsersList');
             const authButton = document.getElementById('authButton');
+            const emojiBtn = document.getElementById('emojiBtn');
+            const micBtn = document.getElementById('micBtn');
+            const recordingIndicator = document.getElementById('recordingIndicator');
+            const recordingTimer = document.getElementById('recordingTimer');
+            const cancelRecordingBtn = document.getElementById('cancelRecordingBtn');
 
             // ==========  ГЕНЕРАЦИЯ ID УСТРОЙСТВА ==========
             function getDeviceId() {
@@ -852,7 +868,7 @@
                 return false;
             }
 
-            // ==========  ПРОВЕРКА И СОЗДАНИЕ ТАБЛИЦЫ AUTH_CODES ==========
+            // ==========  ПРОВЕРКА ТАБЛИЦЫ AUTH_CODES ==========
             async function ensureAuthCodesTable() {
                 try {
                     const { error } = await supabase
@@ -870,12 +886,8 @@
                             user_avatar TEXT,
                             device_id TEXT,
                             expires_at TIMESTAMP WITH TIME ZONE NOT NULL
-                        );
+                        );`);
                         
-                        CREATE INDEX idx_auth_codes_code ON auth_codes(code);
-                        CREATE INDEX idx_auth_codes_expires ON auth_codes(expires_at);`);
-                        
-                        // Показываем уведомление в чате
                         setTimeout(() => {
                             if (messageContainer) {
                                 const warning = document.createElement('div');
@@ -945,11 +957,8 @@
                     
                     if (data && data.length > 0) {
                         const authData = data[0];
-                        
-                        // Получаем ID нового устройства
                         const deviceId = getDeviceId();
                         
-                        // Сохраняем пользователя с ТЕМ ЖЕ ID!
                         currentUser = {
                             id: authData.user_id,
                             deviceId: deviceId,
@@ -959,8 +968,6 @@
                         };
                         
                         localStorage.setItem('tamsyam_user', JSON.stringify(currentUser));
-                        
-                        // Удаляем использованный код
                         await supabase.from('auth_codes').delete().eq('code', code);
                         
                         return true;
@@ -971,9 +978,8 @@
                 return false;
             }
 
-            // ==========  ПОКАЗ МОДАЛЬНОГО ОКНА ПЕРЕНОСА ==========
+            // ==========  МОДАЛКА ПЕРЕНОСА ==========
             function showAuthModal() {
-                // Удаляем старые модалки
                 const oldModal = document.querySelector('.modal-overlay');
                 if (oldModal) oldModal.remove();
 
@@ -988,23 +994,15 @@
                             <p style="color: #8e8e93; margin-bottom: 20px;">
                                 На старом устройстве нажмите «Показать код»
                             </p>
-                            <button id="showCodeBtn" class="modal-button">
-                                🔑 Показать код
-                            </button>
-                            <button id="enterCodeBtn" class="modal-button secondary">
-                                📲 Ввести код
-                            </button>
+                            <button id="showCodeBtn" class="modal-button">🔑 Показать код</button>
+                            <button id="enterCodeBtn" class="modal-button secondary">📲 Ввести код</button>
                         </div>
                         
                         <div id="authStep2" style="display: none;">
                             <input type="text" id="authCodeInput" class="code-input" 
                                    maxlength="6" placeholder="000000" autofocus>
-                            <button id="verifyCodeBtn" class="modal-button">
-                                ✅ Подтвердить
-                            </button>
-                            <button id="backToStep1Btn" class="modal-button secondary">
-                                ← Назад
-                            </button>
+                            <button id="verifyCodeBtn" class="modal-button">✅ Подтвердить</button>
+                            <button id="backToStep1Btn" class="modal-button secondary">← Назад</button>
                         </div>
                         
                         <div id="authStep3" style="display: none; text-align: center;">
@@ -1014,23 +1012,17 @@
                             <p style="color: #8e8e93; font-size: 14px; margin-bottom: 20px;">
                                 Введите этот код на новом устройстве
                             </p>
-                            <button id="closeCodeBtn" class="modal-button secondary">
-                                ✕ Закрыть
-                            </button>
+                            <button id="closeCodeBtn" class="modal-button secondary">✕ Закрыть</button>
                         </div>
                         
-                        <button id="closeModalBtn" class="modal-close">
-                            Закрыть
-                        </button>
+                        <button id="closeModalBtn" class="modal-close">Закрыть</button>
                     </div>
                 `;
                 
                 document.body.appendChild(modal);
                 
-                // Обработчики
                 document.getElementById('closeModalBtn').onclick = () => modal.remove();
                 
-                // Шаг 1: Показать код
                 document.getElementById('showCodeBtn').onclick = async () => {
                     const code = await generateAuthCode();
                     if (code) {
@@ -1038,7 +1030,6 @@
                         document.getElementById('authStep3').style.display = 'block';
                         document.getElementById('generatedCodeDisplay').textContent = code;
                         
-                        // Таймер на 5 минут
                         let timeLeft = 300;
                         if (authCodeTimer) clearInterval(authCodeTimer);
                         
@@ -1058,20 +1049,17 @@
                     }
                 };
                 
-                // Шаг 1: Ввести код
                 document.getElementById('enterCodeBtn').onclick = () => {
                     document.getElementById('authStep1').style.display = 'none';
                     document.getElementById('authStep2').style.display = 'block';
                     document.getElementById('authCodeInput').focus();
                 };
                 
-                // Шаг 2: Назад
                 document.getElementById('backToStep1Btn').onclick = () => {
                     document.getElementById('authStep2').style.display = 'none';
                     document.getElementById('authStep1').style.display = 'block';
                 };
                 
-                // Шаг 2: Подтвердить код
                 document.getElementById('verifyCodeBtn').onclick = async () => {
                     const code = document.getElementById('authCodeInput').value;
                     if (code.length === 6) {
@@ -1086,13 +1074,11 @@
                     }
                 };
                 
-                // Шаг 3: Закрыть
                 document.getElementById('closeCodeBtn').onclick = () => {
                     if (authCodeTimer) clearInterval(authCodeTimer);
                     modal.remove();
                 };
                 
-                // Ввод только цифр
                 const codeInput = document.getElementById('authCodeInput');
                 if (codeInput) {
                     codeInput.addEventListener('input', (e) => {
@@ -1136,7 +1122,6 @@
                     await sendSystemMessage('👋 ' + currentUser.name + ' присоединился к чату');
                 }
                 
-                // Проверяем наличие таблицы auth_codes
                 ensureAuthCodesTable();
             }
 
@@ -1179,7 +1164,7 @@
                 renderMessages(demoMessages);
             }
 
-            // ==========  ОТПРАВКА СООБЩЕНИЯ ==========
+            // ==========  ОТПРАВКА ТЕКСТА ==========
             async function sendMessage(text) {
                 if (!text.trim()) return;
 
@@ -1223,7 +1208,170 @@
                 }
             }
 
-            // ==========  ОТРИСОВКА СООБЩЕНИЙ ==========
+            // ==========  ГОЛОСОВЫЕ СООБЩЕНИЯ ==========
+            async function checkMicrophonePermission() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert('❌ Ваш браузер не поддерживает запись аудио');
+                    return false;
+                }
+                return true;
+            }
+
+            async function startRecording() {
+                if (!await checkMicrophonePermission()) return;
+                
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            sampleRate: 48000
+                        } 
+                    });
+                    
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        if (recordingTimerInterval) {
+                            clearInterval(recordingTimerInterval);
+                            recordingTimerInterval = null;
+                        }
+                        
+                        recordingIndicator.classList.add('hidden');
+                        micBtn.classList.remove('recording');
+                        
+                        if (audioChunks.length > 0) {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            await sendVoiceMessage(audioBlob);
+                        }
+                        
+                        audioChunks = [];
+                        recordingStartTime = null;
+                    };
+                    
+                    mediaRecorder.start(100);
+                    recordingStartTime = Date.now();
+                    
+                    micBtn.classList.add('recording');
+                    recordingIndicator.classList.remove('hidden');
+                    
+                    recordingTimerInterval = setInterval(() => {
+                        if (recordingStartTime) {
+                            const seconds = Math.floor((Date.now() - recordingStartTime) / 1000);
+                            const mins = Math.floor(seconds / 60);
+                            const secs = seconds % 60;
+                            recordingTimer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                            
+                            if (seconds >= 300) {
+                                stopRecording();
+                            }
+                        }
+                    }, 100);
+                    
+                } catch (error) {
+                    console.error('Ошибка доступа к микрофону:', error);
+                    alert('❌ Не удалось получить доступ к микрофону');
+                }
+            }
+
+            function stopRecording() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            }
+
+            function cancelRecording() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    audioChunks = [];
+                }
+                
+                recordingIndicator.classList.add('hidden');
+                micBtn.classList.remove('recording');
+                
+                if (recordingTimerInterval) {
+                    clearInterval(recordingTimerInterval);
+                    recordingTimerInterval = null;
+                }
+            }
+
+            async function sendVoiceMessage(audioBlob) {
+                try {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = async () => {
+                        const base64Audio = reader.result;
+                        const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+                        
+                        const message = {
+                            user_id: currentUser.id,
+                            user_name: currentUser.name,
+                            text: `🎤 Голосовое сообщение`,
+                            avatar: currentUser.avatar,
+                            voice: base64Audio,
+                            voice_duration: duration,
+                            created_at: new Date().toISOString()
+                        };
+
+                        const { error } = await supabase
+                            .from('messages')
+                            .insert([message]);
+
+                        if (error) {
+                            console.error('Ошибка отправки:', error);
+                            alert('❌ Не удалось отправить голосовое сообщение');
+                        }
+                    };
+                } catch (error) {
+                    console.error('Ошибка отправки голоса:', error);
+                }
+            }
+
+            function playVoiceMessage(base64Audio, duration) {
+                if (currentlyPlaying) {
+                    currentlyPlaying.pause();
+                    currentlyPlaying = null;
+                }
+                
+                try {
+                    const audioData = base64Audio.split(',')[1];
+                    const binaryData = atob(audioData);
+                    const arrayBuffer = new ArrayBuffer(binaryData.length);
+                    const view = new Uint8Array(arrayBuffer);
+                    
+                    for (let i = 0; i < binaryData.length; i++) {
+                        view[i] = binaryData.charCodeAt(i);
+                    }
+                    
+                    const audioBlob = new Blob([arrayBuffer], { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        currentlyPlaying = null;
+                    };
+                    
+                    audio.play();
+                    currentlyPlaying = audio;
+                    
+                } catch (error) {
+                    console.error('Ошибка воспроизведения:', error);
+                }
+            }
+
+            // ==========  ОТРИСОВКА СООБЩЕНИЙ (С ГОЛОСОМ) ==========
             function renderMessages(messages, append = false) {
                 if (!messageContainer) return;
 
@@ -1254,10 +1402,41 @@
                         contentDiv.appendChild(authorSpan);
                     }
 
-                    const bubble = document.createElement('div');
-                    bubble.className = 'message-bubble';
-                    bubble.textContent = msg.text;
-                    contentDiv.appendChild(bubble);
+                    // ГОЛОСОВОЕ СООБЩЕНИЕ
+                    if (msg.voice) {
+                        const voiceContainer = document.createElement('div');
+                        voiceContainer.className = 'voice-message';
+                        
+                        const playBtn = document.createElement('button');
+                        playBtn.className = 'voice-play-btn';
+                        playBtn.textContent = '▶';
+                        playBtn.onclick = () => playVoiceMessage(msg.voice, msg.voice_duration);
+                        
+                        const wave = document.createElement('div');
+                        wave.className = 'voice-wave';
+                        
+                        const progress = document.createElement('div');
+                        progress.className = 'voice-progress';
+                        wave.appendChild(progress);
+                        
+                        const durationSpan = document.createElement('span');
+                        durationSpan.className = 'voice-duration';
+                        const mins = Math.floor(msg.voice_duration / 60);
+                        const secs = msg.voice_duration % 60;
+                        durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                        
+                        voiceContainer.appendChild(playBtn);
+                        voiceContainer.appendChild(wave);
+                        voiceContainer.appendChild(durationSpan);
+                        contentDiv.appendChild(voiceContainer);
+                        
+                    } else {
+                        // ТЕКСТОВОЕ СООБЩЕНИЕ
+                        const bubble = document.createElement('div');
+                        bubble.className = 'message-bubble';
+                        bubble.textContent = msg.text;
+                        contentDiv.appendChild(bubble);
+                    }
 
                     const timeSpan = document.createElement('span');
                     timeSpan.className = 'message-time';
@@ -1345,47 +1524,8 @@
                 await sendSystemMessage(`✏️ ${oldName} теперь — ${currentUser.name}`);
             }
 
-            // ==========  ОБРАБОТЧИКИ ==========
-            enterChatBtn.addEventListener('click', () => {
-                joinChat(usernameInput.value);
-            });
-
-            usernameInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    joinChat(usernameInput.value);
-                }
-            });
-
-            sendBtn.addEventListener('click', () => {
-                sendMessage(messageInput.value);
-            });
-
-            messageInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    sendMessage(messageInput.value);
-                }
-            });
-
-            userNameDisplay.addEventListener('change', (e) => {
-                changeName(e.target.value);
-            });
-
-            authButton.addEventListener('click', showAuthModal);
-
-            // ==========  СТАРТ ==========
-            if (!loadSavedUser()) {
-                loginPrompt.classList.remove('hidden');
-                chatApp.classList.add('hidden');
-            } else {
-                joinChat(currentUser.name);
-            }
-
-            // ==========  ЭМОДЗИ ДЛЯ ПК ==========
-            const emojiBtn = document.getElementById('emojiBtn');
+            // ==========  ЭМОДЗИ ==========
             let emojiPicker = null;
-
-            // Список смайликов
             const emojiList = [
                 '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
                 '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
@@ -1426,7 +1566,36 @@
                 document.querySelector('.input-area').appendChild(emojiPicker);
             }
 
-            // Клик по кнопке смайликов
+            // ==========  ОБРАБОТЧИКИ ==========
+            enterChatBtn.addEventListener('click', () => {
+                joinChat(usernameInput.value);
+            });
+
+            usernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    joinChat(usernameInput.value);
+                }
+            });
+
+            sendBtn.addEventListener('click', () => {
+                sendMessage(messageInput.value);
+            });
+
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendMessage(messageInput.value);
+                }
+            });
+
+            userNameDisplay.addEventListener('change', (e) => {
+                changeName(e.target.value);
+            });
+
+            if (authButton) {
+                authButton.addEventListener('click', showAuthModal);
+            }
+
             if (emojiBtn) {
                 emojiBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -1434,12 +1603,68 @@
                 });
             }
 
-            // Закрыть панель при клике вне
             document.addEventListener('click', (e) => {
                 if (emojiPicker && !emojiPicker.contains(e.target) && e.target !== emojiBtn) {
                     emojiPicker.classList.add('hidden');
                 }
             });
+
+            // ==========  ОБРАБОТЧИКИ МИКРОФОНА ==========
+            if (micBtn) {
+                let isPressed = false;
+                let pressTimer = null;
+                
+                micBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    isPressed = true;
+                    pressTimer = setTimeout(() => {
+                        if (isPressed) {
+                            startRecording();
+                        }
+                    }, 300);
+                });
+                
+                micBtn.addEventListener('mouseup', () => {
+                    isPressed = false;
+                    if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopRecording();
+                    }
+                });
+                
+                micBtn.addEventListener('mouseleave', () => {
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopRecording();
+                    }
+                });
+                
+                micBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    startRecording();
+                });
+                
+                micBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopRecording();
+                    }
+                });
+            }
+
+            if (cancelRecordingBtn) {
+                cancelRecordingBtn.addEventListener('click', cancelRecording);
+            }
+
+            // ==========  СТАРТ ==========
+            if (!loadSavedUser()) {
+                loginPrompt.classList.remove('hidden');
+                chatApp.classList.add('hidden');
+            } else {
+                joinChat(currentUser.name);
+            }
         })();
     </script>
 </body>
