@@ -1267,6 +1267,66 @@
             } else {
                 joinChat(currentUser.name);
             }
+
+            // ==========  ЭМОДЗИ ДЛЯ ПК ==========
+            const emojiBtn = document.getElementById('emojiBtn');
+            let emojiPicker = null;
+
+            // Список смайликов
+            const emojiList = [
+                '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
+                '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
+                '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜',
+                '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '🤯', '😡',
+                '👍', '👎', '👊', '✊', '🤛', '🤜', '🤞', '✌️',
+                '🤟', '🤘', '👌', '🤌', '🤏', '👈', '👉', '👆',
+                '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍',
+                '🔥', '✨', '⭐', '🌟', '💫', '💥', '💢', '💯'
+            ];
+
+            function createEmojiPicker() {
+                if (emojiPicker) {
+                    emojiPicker.classList.toggle('hidden');
+                    return;
+                }
+    
+                emojiPicker = document.createElement('div');
+                emojiPicker.className = 'emoji-picker';
+    
+                emojiList.forEach(emoji => {
+                    const item = document.createElement('span');
+                    item.className = 'emoji-item';
+                    item.textContent = emoji;
+                    item.onclick = () => {
+                        const input = document.getElementById('messageInput');
+                        const cursorPos = input.selectionStart || input.value.length;
+                        const textBefore = input.value.substring(0, cursorPos);
+                        const textAfter = input.value.substring(cursorPos);
+                        input.value = textBefore + emoji + textAfter;
+                        input.focus();
+                        input.selectionStart = input.selectionEnd = cursorPos + emoji.length;
+                        emojiPicker.classList.add('hidden');
+                    };
+                    emojiPicker.appendChild(item);
+                });
+    
+                document.querySelector('.input-area').appendChild(emojiPicker);
+            }
+
+            // Клик по кнопке смайликов
+            if (emojiBtn) {
+                emojiBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    createEmojiPicker();
+                });
+            }
+
+            // Закрыть панель при клике вне
+            document.addEventListener('click', (e) => {
+                if (emojiPicker && !emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+                    emojiPicker.classList.add('hidden');
+                }
+            });
         })();
     </script>
 </body>
