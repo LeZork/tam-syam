@@ -335,6 +335,12 @@
             margin-left: 4px;
         }
 
+        /* Убираем старые кнопки */
+        .photo-button, .mic-button {
+            display: none;
+        }
+
+
         .emoji-button:hover, .photo-button:hover, .mic-button:hover {
             background: #2c2c2e;
             transform: scale(0.96);
@@ -794,42 +800,29 @@
 
         /* Оптимизация для маленьких экранов */
         @media (max-width: 480px) {
-            .input-area {
-                padding: 10px 12px;
-                gap: 6px;
-            }
-    
-            .message-input {
-                padding: 10px 16px;
-                font-size: 15px;
-            }
-    
+            .attach-button,
             .send-button,
-            .emoji-button, 
-            .photo-button, 
-            .mic-button {
+            .emoji-button {
                 width: 40px;
                 height: 40px;
                 font-size: 20px;
             }
     
-            .right-buttons {
-                gap: 3px;
+            .attach-dropdown {
+                left: 12px;
+                right: 12px;
+                width: auto;
+                min-width: auto;
             }
         }
 
         @media (max-width: 380px) {
-            .emoji-button, 
-            .photo-button, 
-            .mic-button,
-            .send-button {
+            .attach-button,
+            .send-button,
+            .emoji-button {
                 width: 38px;
                 height: 38px;
                 font-size: 18px;
-            }
-    
-            .message-input {
-                padding: 9px 14px;
             }
         }
     </style>
@@ -895,11 +888,30 @@
             <input type="text" class="message-input" id="messageInput" placeholder="Написать в Там-Сям..." autofocus>
             <div class="right-buttons">
                 <button class="emoji-button" id="emojiBtn">😊</button>
-                <button class="photo-button" id="photoBtn">📷</button>
-                <button class="mic-button" id="micBtn">🎤</button>
+                <button class="attach-button" id="attachBtn">➕</button>
                 <button class="send-button" id="sendBtn">➤</button>
             </div>
             <input type="file" id="photoInput" accept="image/*" style="display: none;">
+            <input type="file" id="videoInput" accept="video/*" style="display: none;">
+            
+            <!-- Dropdown меню -->
+            <div id="attachDropdown" class="attach-dropdown hidden">
+                <button class="attach-option" id="photoOption">
+                    <span>📷</span>
+                    <span class="option-title">Фото</span>
+                    <span class="option-desc">JPEG, PNG</span>
+                </button>
+                <button class="attach-option" id="videoOption">
+                    <span>🎥</span>
+                    <span class="option-title">Видео</span>
+                    <span class="option-desc">MP4, MOV</span>
+                </button>
+                <button class="attach-option" id="voiceOption">
+                    <span>🎤</span>
+                    <span class="option-title">Голосовое</span>
+                    <span class="option-desc">Нажми и держи</span>
+                </button>
+            </div>
         </div>
         <div id="recordingIndicator" class="recording-indicator hidden">
             <span>🎤 Запись...</span>
