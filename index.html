@@ -1065,6 +1065,175 @@
                 const photoProgressFill = document.getElementById('photoProgressFill');
                 const cancelPhotoUploadBtn = document.getElementById('cancelPhotoUploadBtn');
 
+                // ==========  КЭШИРОВАНИЕ МЕДИА ==========
+                const MEDIA_CACHE_VERSION = '1.0';
+                const MEDIA_CACHE_PREFIX = 'tamsyam_media_';
+
+                // IndexedDB для больших файлов
+                const DB_NAME = 'TamsyamMediaCache';
+                const DB_VERSION = 1;
+                const STORE_NAME = 'media';
+
+                let dbInstance = null;
+
+                // Инициализация IndexedDB
+                async function initMediaCache() {
+                    return new Promise((resolve, reject) => {
+                        if (dbInstance) {
+                            resolve(dbInstance);
+                            return;
+                        }
+
+                        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                        request.onerror = () => reject(request.error);
+                        request.onsuccess = () => {
+                            dbInstance = request.result;
+                            resolve(dbInstance);
+                        };
+
+                        request.onupgradeneeded = (event) => {
+                            const db = event.target.result;
+                            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                                const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                                store.createIndex('timestamp', 'timestamp', { unique: false });
+                                store.createIndex('type', 'type', { unique: false });
+                                store.createIndex('size', 'size', { unique: false });
+                            }
+                        };
+                    });
+                }
+
+                // Сохранение медиа в кэш
+                async function cacheMedia(key, base64Data, type, size = 0) {
+                    try {
+                        // Для маленьких файлов (< 100KB) используем localStorage
+                        if (size < 100 * 1024) {
+                            try {
+                                localStorage.setItem(MEDIA_CACHE_PREFIX + key, JSON.stringify({
+                                    data: base64Data,
+                                    type: type,
+                                    timestamp: Date.now(),
+                                    size: size
+                                }));
+                                return true;
+                            } catch (e) {
+                                // localStorage переполнен, используем IndexedDB
+                                console.log('localStorage full, using IndexedDB');
+                            }
+                        }
+
+                        // Для больших файлов используем IndexedDB
+                        const db = await initMediaCache();
+                        return new Promise((resolve, reject) => {
+                            const transaction = db.transaction([STORE_NAME], 'readwrite');
+                            const store = transaction.objectStore(STORE_NAME);
+            
+                            const request = store.put({
+                                id: key,
+                                data: base64Data,
+                                type: type,
+                                timestamp: Date.now(),
+                                size: size
+                            });
+
+                            request.onsuccess = () => resolve(true);
+                            request.onerror = () => {
+                                console.error('IndexedDB cache error:', request.error);
+                                resolve(false);
+                            };
+                        });
+                    } catch (e) {
+                        console.error('Cache save error:', e);
+                        return false;
+                    }
+                }
+
+                // Получение медиа из кэша
+                async function getCachedMedia(key, maxAge = 7 * 24 * 60 * 60 * 1000) { // 7 дней по умолчанию
+                    // Сначала проверяем localStorage
+                    try {
+                        const cached = localStorage.getItem(MEDIA_CACHE_PREFIX + key);
+                        if (cached) {
+                            const data = JSON.parse(cached);
+                            if (Date.now() - data.timestamp < maxAge) {
+                                return data.data;
+                            } else {
+                                localStorage.removeItem(MEDIA_CACHE_PREFIX + key);
+                            }
+                        }
+                    } catch (e) {
+                        console.log('localStorage read error:', e);
+                    }
+
+                    // Затем IndexedDB
+                    try {
+                        const db = await initMediaCache();
+                        return new Promise((resolve) => {
+                            const transaction = db.transaction([STORE_NAME], 'readonly');
+                            const store = transaction.objectStore(STORE_NAME);
+                            const request = store.get(key);
+
+                            request.onsuccess = () => {
+                                if (request.result) {
+                                    if (Date.now() - request.result.timestamp < maxAge) {
+                                        resolve(request.result.data);
+                                    } else {
+                                        // Удаляем устаревшее
+                                        const deleteTx = db.transaction([STORE_NAME], 'readwrite');
+                                        deleteTx.objectStore(STORE_NAME).delete(key);
+                                        resolve(null);
+                                    }
+                                } else {
+                                    resolve(null);
+                                }
+                            };
+                            request.onerror = () => resolve(null);
+                        });
+                    } catch (e) {
+                        console.error('IndexedDB read error:', e);
+                        return null;
+                    }
+                }
+
+                // Очистка устаревшего кэша
+                async function cleanMediaCache(maxAge = 7 * 24 * 60 * 60 * 1000) {
+                    const cutoff = Date.now() - maxAge;
+    
+                    // Очистка localStorage
+                    try {
+                        const keys = Object.keys(localStorage);
+                        keys.forEach(key => {
+                            if (key.startsWith(MEDIA_CACHE_PREFIX)) {
+                                try {
+                                    const data = JSON.parse(localStorage.getItem(key));
+                                    if (data.timestamp < cutoff) {
+                                        localStorage.removeItem(key);
+                                    }
+                                } catch (e) {}
+                            }
+                        });
+                    } catch (e) {}
+
+                    // Очистка IndexedDB
+                    try {
+                        const db = await initMediaCache();
+                        const transaction = db.transaction([STORE_NAME], 'readwrite');
+                        const store = transaction.objectStore(STORE_NAME);
+                        const index = store.index('timestamp');
+                        const range = IDBKeyRange.upperBound(cutoff);
+        
+                        index.openCursor(range).onsuccess = (event) => {
+                            const cursor = event.target.result;
+                            if (cursor) {
+                                store.delete(cursor.primaryKey);
+                                cursor.continue();
+                            }
+                        };
+                    } catch (e) {}
+                }
+
+
                 // ==========  ВЫБОР АВАТАРКИ ==========
                 avatarOptions.forEach(option => {
                     option.addEventListener('click', () => {
@@ -1358,6 +1527,7 @@
                     ensureAuthCodesTable();
                 }
 
+                // ==========  ОПТИМИЗИРОВАННАЯ ЗАГРУЗКА СООБЩЕНИЙ ==========
                 async function loadMessages() {
                     try {
                         const { data, error } = await supabase
@@ -1369,6 +1539,22 @@
                         if (error) throw error;
 
                         if (data && data.length > 0) {
+                            // Кэшируем медиа из загруженных сообщений
+                            data.forEach(msg => {
+                                if (msg.photo) {
+                                    const key = `photo_${msg.id}`;
+                                    cacheMedia(key, msg.photo, 'photo', msg.photo_size);
+                                }
+                                if (msg.video) {
+                                    const key = `video_${msg.id}`;
+                                    cacheMedia(key, msg.video, 'video', msg.video_size);
+                                }
+                                if (msg.voice) {
+                                    const key = `voice_${msg.id}`;
+                                    cacheMedia(key, msg.voice, 'voice', msg.voice_size);
+                                }
+                            });
+            
                             renderMessages(data);
                         } else {
                             createDemoMessages();
@@ -1770,16 +1956,20 @@
                     }
                 }
 
-                function renderMessages(messages, append = false) {
+                // ==========  ОПТИМИЗИРОВАННЫЙ renderMessages ==========
+                async function renderMessages(messages, append = false) {
                     if (!messageContainer) return;
 
                     if (!append) {
                         messageContainer.innerHTML = '';
                     }
 
-                    messages.forEach(msg => {
+                    // Сначала быстро рендерим текстовый скелет без ожидания медиа
+                    const mediaTasks = [];
+
+                    for (const msg of messages) {
                         const isMe = msg.user_id === currentUser.id;
-                        
+        
                         const wrapper = document.createElement('div');
                         wrapper.className = `message-wrapper ${isMe ? 'my-message' : 'other-message'}`;
 
@@ -1800,63 +1990,8 @@
                             contentDiv.appendChild(authorSpan);
                         }
 
-                        if (msg.photo) {
-                            const photoContainer = document.createElement('div');
-                            photoContainer.className = 'photo-message';
-                            
-                            const img = document.createElement('img');
-                            img.src = msg.photo;
-                            img.alt = 'Фото';
-                            img.loading = 'lazy';
-                            
-                            img.onclick = () => showFullscreenPhoto(msg.photo);
-                            
-                            photoContainer.appendChild(img);
-                            contentDiv.appendChild(photoContainer);
-                        }
-                        else if (msg.video) {
-                            const videoContainer = document.createElement('div');
-                            videoContainer.className = 'photo-message';
-                            videoContainer.style.position = 'relative';
-        
-                            const video = document.createElement('video');
-                            video.src = msg.video;
-                            video.controls = true;
-                            video.preload = 'metadata';
-                            video.style.width = '100%';
-                            video.style.borderRadius = '18px';
-        
-                            videoContainer.appendChild(video);
-                            contentDiv.appendChild(videoContainer);
-                        }
-                        else if (msg.voice) {
-                            const voiceContainer = document.createElement('div');
-                            voiceContainer.className = 'voice-message';
-                            
-                            const playBtn = document.createElement('button');
-                            playBtn.className = 'voice-play-btn';
-                            playBtn.textContent = '▶';
-                            playBtn.onclick = () => playVoiceMessage(msg.voice, msg.voice_duration);
-                            
-                            const wave = document.createElement('div');
-                            wave.className = 'voice-wave';
-                            
-                            const progress = document.createElement('div');
-                            progress.className = 'voice-progress';
-                            wave.appendChild(progress);
-                            
-                            const durationSpan = document.createElement('span');
-                            durationSpan.className = 'voice-duration';
-                            const mins = Math.floor(msg.voice_duration / 60);
-                            const secs = msg.voice_duration % 60;
-                            durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-                            
-                            voiceContainer.appendChild(playBtn);
-                            voiceContainer.appendChild(wave);
-                            voiceContainer.appendChild(durationSpan);
-                            contentDiv.appendChild(voiceContainer);
-                            
-                        } else {
+                        // Текстовый bubble рисуем сразу
+                        if (!msg.photo && !msg.video && !msg.voice && msg.text) {
                             const bubble = document.createElement('div');
                             bubble.className = 'message-bubble';
                             bubble.textContent = msg.text;
@@ -1867,14 +2002,142 @@
                         timeSpan.className = 'message-time';
                         const time = msg.created_at ? new Date(msg.created_at) : new Date();
                         timeSpan.textContent = time.getHours().toString().padStart(2, '0') + ':' + 
-                                             time.getMinutes().toString().padStart(2, '0');
+                                            time.getMinutes().toString().padStart(2, '0');
                         contentDiv.appendChild(timeSpan);
 
                         wrapper.appendChild(contentDiv);
                         messageContainer.appendChild(wrapper);
+
+                        // Отложенная загрузка медиа, чтобы не блокировать отрисовку текста
+                        if (msg.photo || msg.video || msg.voice) {
+                            mediaTasks.push((async () => {
+                                // Небольшая заглушка под медиа, чтобы не прыгала верстка
+                                const mediaPlaceholder = document.createElement('div');
+                                mediaPlaceholder.className = 'photo-message';
+                                contentDiv.insertBefore(mediaPlaceholder, timeSpan);
+
+                                if (msg.photo) {
+                                    const img = document.createElement('img');
+                                    img.alt = 'Фото';
+                                    img.loading = 'lazy';
+
+                                    const cacheKey = `photo_${msg.id}`;
+                                    const cachedPhoto = await getCachedMedia(cacheKey);
+
+                                    if (cachedPhoto) {
+                                        img.src = cachedPhoto;
+                                    } else {
+                                        img.src = msg.photo;
+                                        cacheMedia(cacheKey, msg.photo, 'photo', msg.photo_size);
+                                    }
+
+                                    img.onclick = () => showFullscreenPhoto(img.src);
+
+                                    mediaPlaceholder.innerHTML = '';
+                                    mediaPlaceholder.appendChild(img);
+                                } else if (msg.video) {
+                                    const videoContainer = document.createElement('div');
+                                    videoContainer.className = 'photo-message';
+                                    videoContainer.style.position = 'relative';
+
+                                    const video = document.createElement('video');
+                                    video.controls = true;
+                                    video.preload = 'metadata';
+                                    video.style.width = '100%';
+                                    video.style.borderRadius = '18px';
+
+                                    const cacheKey = `video_${msg.id}`;
+                                    const cachedVideo = await getCachedMedia(cacheKey);
+
+                                    if (cachedVideo) {
+                                        video.src = cachedVideo;
+                                    } else {
+                                        video.src = msg.video;
+                                        cacheMedia(cacheKey, msg.video, 'video', msg.video_size);
+                                    }
+
+                                    videoContainer.appendChild(video);
+                                    mediaPlaceholder.replaceWith(videoContainer);
+                                } else if (msg.voice) {
+                                    const voiceContainer = document.createElement('div');
+                                    voiceContainer.className = 'voice-message';
+            
+                                    const playBtn = document.createElement('button');
+                                    playBtn.className = 'voice-play-btn';
+                                    playBtn.textContent = '▶';
+            
+                                    const cacheKey = `voice_${msg.id}`;
+                                    const cachedVoice = await getCachedMedia(cacheKey);
+            
+                                    if (cachedVoice) {
+                                        playBtn.onclick = () => playVoiceMessage(cachedVoice, msg.voice_duration);
+                                    } else {
+                                        playBtn.onclick = () => playVoiceMessage(msg.voice, msg.voice_duration);
+                                        cacheMedia(cacheKey, msg.voice, 'voice', msg.voice_size);
+                                    }
+            
+                                    const wave = document.createElement('div');
+                                    wave.className = 'voice-wave';
+            
+                                    const progress = document.createElement('div');
+                                    progress.className = 'voice-progress';
+                                    wave.appendChild(progress);
+            
+                                    const durationSpan = document.createElement('span');
+                                    durationSpan.className = 'voice-duration';
+                                    const mins = Math.floor(msg.voice_duration / 60);
+                                    const secs = msg.voice_duration % 60;
+                                    durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            
+                                    voiceContainer.appendChild(playBtn);
+                                    voiceContainer.appendChild(wave);
+                                    voiceContainer.appendChild(durationSpan);
+
+                                    mediaPlaceholder.replaceWith(voiceContainer);
+                                }
+                            })());
+                        }
+                    }
+
+                    // Не ждём все задачи перед тем, как показать контент, но даём им договориться "на фоне"
+                    Promise.allSettled(mediaTasks).then(() => {
+                        messageContainer.scrollTop = messageContainer.scrollHeight;
                     });
 
+                    // Скроллим к низу сразу после отрисовки текста
                     messageContainer.scrollTop = messageContainer.scrollHeight;
+                }
+
+                // ==========  ПРЕДЗАГРУЗКА ПОПУЛЯРНЫХ МЕДИА ==========
+                async function preloadPopularMedia() {
+                    try {
+                        const { data } = await supabase
+                            .from('messages')
+                            .select('id, photo, video, voice, photo_size, video_size, voice_size')
+                            .not('photo', 'is', null)
+                            .or('video.not.is,null,voice.not.is,null')
+                            .order('created_at', { ascending: false })
+                            .limit(20);
+
+                        if (data) {
+                            data.forEach(msg => {
+                                if (msg.photo && msg.photo_size < 500 * 1024) { // < 500KB
+                                    const key = `photo_${msg.id}`;
+                                    cacheMedia(key, msg.photo, 'photo', msg.photo_size);
+                                }
+                                if (msg.video && msg.video_size < 1024 * 1024) { // < 1MB
+                                    const key = `video_${msg.id}`;
+                                    cacheMedia(key, msg.video, 'video', msg.video_size);
+                                }
+                                if (msg.voice && msg.voice_size < 200 * 1024) { // < 200KB
+                                    const key = `voice_${msg.id}`;
+                                    cacheMedia(key, msg.voice, 'voice', msg.voice_size);
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.log('Preload error:', e);
+                    }
                 }
 
                 function subscribeToMessages() {
@@ -2183,6 +2446,18 @@
                         videoInput.value = '';
                     });
                 }
+
+                // Запускаем очистку кэша раз в день
+                setInterval(() => {
+                    cleanMediaCache();
+                }, 24 * 60 * 60 * 1000);
+
+                // Предзагружаем популярные медиа при старте
+                window.addEventListener('load', () => {
+                    setTimeout(() => {
+                        preloadPopularMedia();
+                    }, 5000); // Через 5 секунд после загрузки
+                });
 
                 // ==========  СТАРТ ==========
                 if (!loadSavedUser()) {
