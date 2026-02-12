@@ -6,7 +6,7 @@
     <title>Там-Сям · общий чат для своих</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Стили полностью сохранены */
+        /* Стили полностью сохранены и добавлены новые */
         * {
             margin: 0;
             padding: 0;
@@ -271,6 +271,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            position: relative;
         }
 
         .message-input {
@@ -308,7 +309,7 @@
             transform: scale(0.96);
         }
 
-        .emoji-button {
+        .emoji-button, .photo-button {
             background: #1c1c1e;
             border: 0.5px solid #3a3a3c;
             color: white;
@@ -321,9 +322,10 @@
             font-size: 24px;
             cursor: pointer;
             transition: 0.2s;
+            flex-shrink: 0;
         }
 
-        .emoji-button:hover {
+        .emoji-button:hover, .photo-button:hover {
             background: #2c2c2e;
             transform: scale(0.96);
         }
@@ -439,28 +441,28 @@
             max-width: 250px;
         }
 
-.voice-play-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #248bf5;
-    border: none;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    cursor: pointer;
-}
+        .voice-play-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #248bf5;
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            cursor: pointer;
+        }
 
-.voice-wave {
-    flex: 1;
-    height: 24px;
-    background: #2c2c2e;
-    border-radius: 12px;
-    position: relative;
-    overflow: hidden;
-}
+        .voice-wave {
+            flex: 1;
+            height: 24px;
+            background: #2c2c2e;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
 
         .voice-progress {
             position: absolute;
@@ -479,8 +481,111 @@
             min-width: 35px;
         }
 
-        .input-area {
+        /* Стили для фото */
+        .photo-message {
+            max-width: 300px;
+            max-height: 400px;
+            border-radius: 18px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .photo-message img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .photo-message:hover {
+            opacity: 0.95;
+            transform: scale(0.98);
+        }
+
+        .photo-preview-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+            padding: 20px;
+        }
+
+        .photo-preview-content {
             position: relative;
+            max-width: 90%;
+            max-height: 80vh;
+        }
+
+        .photo-preview-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            border-radius: 16px;
+            border: 1px solid #3a3a3c;
+        }
+
+        .photo-preview-close {
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            background: #1c1c1e;
+            border: 1px solid #3a3a3c;
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .photo-preview-close:hover {
+            background: #2c2c2e;
+            transform: scale(0.95);
+        }
+
+        .photo-upload-progress {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            right: 20px;
+            background: #1c1c1e;
+            border: 1px solid #248bf5;
+            border-radius: 30px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: white;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .photo-progress-bar {
+            height: 6px;
+            background: #2c2c2e;
+            border-radius: 3px;
+            flex: 1;
+            margin: 0 16px;
+            overflow: hidden;
+        }
+
+        .photo-progress-fill {
+            height: 100%;
+            background: #248bf5;
+            width: 0%;
+            border-radius: 3px;
+            transition: width 0.2s;
         }
 
         .login-prompt {
@@ -593,7 +698,6 @@
             display: none;
         }
 
-        /* Модальное окно */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -754,6 +858,8 @@
 
         <div class="input-area">
             <button class="emoji-button" id="emojiBtn">😊</button>
+            <button class="photo-button" id="photoBtn">📷</button>
+            <input type="file" id="photoInput" accept="image/*" style="display: none;">
             <input type="text" class="message-input" id="messageInput" placeholder="Написать в Там-Сям..." autofocus>
             <button class="mic-button" id="micBtn">🎤</button>
             <button class="send-button" id="sendBtn">➤</button>
@@ -762,6 +868,13 @@
             <span>🎤 Запись...</span>
             <span id="recordingTimer" class="recording-timer">0:00</span>
             <button id="cancelRecordingBtn" class="recording-cancel">✕</button>
+        </div>
+        <div id="photoUploadProgress" class="photo-upload-progress hidden">
+            <span>📷 Загрузка фото...</span>
+            <div class="photo-progress-bar">
+                <div id="photoProgressFill" class="photo-progress-fill"></div>
+            </div>
+            <button id="cancelPhotoUploadBtn" class="recording-cancel">✕</button>
         </div>
         <div class="footer-note">
             <span>●</span> @sadzorax <span>●</span>
@@ -794,6 +907,9 @@
             let recordingTimerInterval = null;
             let currentlyPlaying = null;
 
+            // ==========  ПЕРЕМЕННЫЕ ДЛЯ ФОТО ==========
+            let photoUploadCanceled = false;
+
             // ==========  ЭЛЕМЕНТЫ DOM ==========
             const loginPrompt = document.getElementById('loginPrompt');
             const chatApp = document.getElementById('chatApp');
@@ -814,6 +930,13 @@
             const recordingIndicator = document.getElementById('recordingIndicator');
             const recordingTimer = document.getElementById('recordingTimer');
             const cancelRecordingBtn = document.getElementById('cancelRecordingBtn');
+            
+            // Новые элементы для фото
+            const photoBtn = document.getElementById('photoBtn');
+            const photoInput = document.getElementById('photoInput');
+            const photoUploadProgress = document.getElementById('photoUploadProgress');
+            const photoProgressFill = document.getElementById('photoProgressFill');
+            const cancelPhotoUploadBtn = document.getElementById('cancelPhotoUploadBtn');
 
             // ==========  ГЕНЕРАЦИЯ ID УСТРОЙСТВА ==========
             function getDeviceId() {
@@ -1191,6 +1314,107 @@
                 }
             }
 
+            // ==========  ОТПРАВКА ФОТО ==========
+            async function sendPhoto(file) {
+                if (!file) return;
+                
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('❌ Файл слишком большой. Максимальный размер - 10MB');
+                    return;
+                }
+
+                if (!file.type.startsWith('image/')) {
+                    alert('❌ Пожалуйста, выберите изображение');
+                    return;
+                }
+
+                photoUploadProgress.classList.remove('hidden');
+                photoProgressFill.style.width = '0%';
+                photoUploadCanceled = false;
+
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                
+                reader.onloadstart = () => {
+                    photoProgressFill.style.width = '30%';
+                };
+                
+                reader.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 70 + 30;
+                        photoProgressFill.style.width = percent + '%';
+                    }
+                };
+                
+                reader.onloadend = async () => {
+                    if (photoUploadCanceled) {
+                        photoUploadProgress.classList.add('hidden');
+                        return;
+                    }
+                    
+                    photoProgressFill.style.width = '100%';
+                    
+                    const base64Photo = reader.result;
+                    
+                    const message = {
+                        user_id: currentUser.id,
+                        user_name: currentUser.name,
+                        text: `📷 Фото`,
+                        avatar: currentUser.avatar,
+                        photo: base64Photo,
+                        photo_name: file.name,
+                        photo_size: file.size,
+                        created_at: new Date().toISOString()
+                    };
+
+                    try {
+                        const { error } = await supabase
+                            .from('messages')
+                            .insert([message]);
+
+                        if (error) {
+                            console.error('Ошибка отправки фото:', error);
+                            alert('❌ Не удалось отправить фото');
+                        }
+                    } catch (error) {
+                        console.error('Ошибка:', error);
+                    } finally {
+                        setTimeout(() => {
+                            photoUploadProgress.classList.add('hidden');
+                            photoProgressFill.style.width = '0%';
+                        }, 500);
+                    }
+                };
+            }
+
+            // ==========  ПОКАЗ ФОТО НА ВЕСЬ ЭКРАН ==========
+            function showFullscreenPhoto(photoSrc) {
+                const existingPreview = document.querySelector('.photo-preview-container');
+                if (existingPreview) existingPreview.remove();
+
+                const previewContainer = document.createElement('div');
+                previewContainer.className = 'photo-preview-container';
+                
+                previewContainer.innerHTML = `
+                    <div class="photo-preview-content">
+                        <img src="${photoSrc}" alt="Фото">
+                        <button class="photo-preview-close">✕</button>
+                    </div>
+                `;
+                
+                document.body.appendChild(previewContainer);
+                
+                previewContainer.querySelector('.photo-preview-close').onclick = () => {
+                    previewContainer.remove();
+                };
+                
+                previewContainer.onclick = (e) => {
+                    if (e.target === previewContainer) {
+                        previewContainer.remove();
+                    }
+                };
+            }
+
             // ==========  СИСТЕМНОЕ СООБЩЕНИЕ ==========
             async function sendSystemMessage(text) {
                 const message = {
@@ -1371,7 +1595,7 @@
                 }
             }
 
-            // ==========  ОТРИСОВКА СООБЩЕНИЙ (С ГОЛОСОМ) ==========
+            // ==========  ОТРИСОВКА СООБЩЕНИЙ (С ФОТО И ГОЛОСОМ) ==========
             function renderMessages(messages, append = false) {
                 if (!messageContainer) return;
 
@@ -1402,8 +1626,23 @@
                         contentDiv.appendChild(authorSpan);
                     }
 
+                    // ФОТО СООБЩЕНИЕ
+                    if (msg.photo) {
+                        const photoContainer = document.createElement('div');
+                        photoContainer.className = 'photo-message';
+                        
+                        const img = document.createElement('img');
+                        img.src = msg.photo;
+                        img.alt = 'Фото';
+                        img.loading = 'lazy';
+                        
+                        img.onclick = () => showFullscreenPhoto(msg.photo);
+                        
+                        photoContainer.appendChild(img);
+                        contentDiv.appendChild(photoContainer);
+                    } 
                     // ГОЛОСОВОЕ СООБЩЕНИЕ
-                    if (msg.voice) {
+                    else if (msg.voice) {
                         const voiceContainer = document.createElement('div');
                         voiceContainer.className = 'voice-message';
                         
@@ -1600,6 +1839,31 @@
                 emojiBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     createEmojiPicker();
+                });
+            }
+
+            // ==========  ОБРАБОТЧИКИ ФОТО ==========
+            if (photoBtn) {
+                photoBtn.addEventListener('click', () => {
+                    photoInput.click();
+                });
+            }
+
+            if (photoInput) {
+                photoInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        sendPhoto(file);
+                    }
+                    photoInput.value = '';
+                });
+            }
+
+            if (cancelPhotoUploadBtn) {
+                cancelPhotoUploadBtn.addEventListener('click', () => {
+                    photoUploadCanceled = true;
+                    photoUploadProgress.classList.add('hidden');
+                    photoProgressFill.style.width = '0%';
                 });
             }
 
