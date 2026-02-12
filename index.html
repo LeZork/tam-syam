@@ -6,7 +6,7 @@
     <title>Там-Сям · общий чат для своих</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Стили полностью сохранены, как в предыдущей версии */
+        /* Стили полностью сохранены */
         * {
             margin: 0;
             padding: 0;
@@ -43,6 +43,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
         }
 
         .avatar-group {
@@ -144,8 +145,28 @@
             border: 0.5px solid #3a3a3c;
         }
 
-        .user-name-input::placeholder {
-            color: #8e8e93;
+        .auth-button {
+            background: #3a3a3c;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 0.5px solid #5a5a5e;
+        }
+
+        .auth-button:hover {
+            background: #4a4a4e;
+        }
+
+        .auth-button:active {
+            transform: scale(0.95);
         }
 
         .messages-container {
@@ -396,6 +417,107 @@
         .hidden {
             display: none;
         }
+
+        /* Модальное окно */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content {
+            background: #1c1c1e;
+            padding: 32px;
+            border-radius: 28px;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid #3a3a3c;
+        }
+
+        .modal-title {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .code-display {
+            font-size: 48px;
+            font-weight: 700;
+            color: white;
+            text-align: center;
+            letter-spacing: 8px;
+            background: #2c2c2e;
+            padding: 20px;
+            border-radius: 18px;
+            margin-bottom: 16px;
+            border: 1px solid #248bf5;
+        }
+
+        .code-input {
+            width: 100%;
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+            padding: 16px;
+            border-radius: 18px;
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            letter-spacing: 8px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        .code-input:focus {
+            border-color: #248bf5;
+        }
+
+        .modal-button {
+            background: #248bf5;
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 18px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        .modal-button.secondary {
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+        }
+
+        .modal-button:hover {
+            opacity: 0.9;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #8e8e93;
+            font-size: 14px;
+            margin-top: 16px;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .timer-text {
+            color: #5acf5a;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -405,7 +527,6 @@
             <div class="login-title">Там‑Сям</div>
             <div class="login-sub">Выберите аватар и введите имя</div>
             
-            <!-- Селектор аватарок -->
             <div class="avatar-selector" id="avatarSelector">
                 <div class="avatar-option selected" data-avatar="😎">😎</div>
                 <div class="avatar-option" data-avatar="🌸">🌸</div>
@@ -424,7 +545,7 @@
             <input type="text" id="usernameInput" class="login-input" placeholder="Ваше имя" maxlength="20">
             <button id="enterChatBtn" class="login-button">Войти в чат →</button>
             <div style="color: #8e8e93; font-size: 12px; margin-top: 16px; text-align: center;">
-                ⚡️ Один общий диалог навсегда
+                ⚡️ Можно перенести аккаунт на другое устройство
             </div>
         </div>
     </div>
@@ -449,6 +570,9 @@
                 <div class="user-avatar-small" id="userAvatar">👤</div>
                 <input type="text" id="userNameDisplay" class="user-name-input" maxlength="20" placeholder="Ваше имя">
             </div>
+            <button id="authButton" class="auth-button">
+                📱 Перенести
+            </button>
         </div>
 
         <div class="messages-container" id="messageContainer"></div>
@@ -471,15 +595,16 @@
 
             // ==========  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
             let currentUser = {
-                id: null,        // постоянный ID на основе устройства
+                id: null,
                 name: '',
                 avatar: '😎',
-                firstJoin: false // был ли уже в чате
+                firstJoin: false
             };
 
             let onlineUsers = new Map();
             let messagesSubscription = null;
-            let hasJoinedBefore = false; // флаг, чтобы не спамить "присоединился"
+            let hasJoinedBefore = false;
+            let authCodeTimer = null;
 
             // ==========  ЭЛЕМЕНТЫ DOM ==========
             const loginPrompt = document.getElementById('loginPrompt');
@@ -495,12 +620,12 @@
             const userAvatar = document.getElementById('userAvatar');
             const onlineCountBadge = document.getElementById('onlineCountBadge');
             const onlineUsersList = document.getElementById('onlineUsersList');
+            const authButton = document.getElementById('authButton');
 
-            // ==========  ГЕНЕРАЦИЯ ПОСТОЯННОГО ID ==========
+            // ==========  ГЕНЕРАЦИЯ ID УСТРОЙСТВА ==========
             function getDeviceId() {
                 let deviceId = localStorage.getItem('tamsyam_device_id');
                 if (!deviceId) {
-                    // Создаем настоящий постоянный ID
                     deviceId = 'device_' + Math.random().toString(36).substring(2) + Date.now();
                     localStorage.setItem('tamsyam_device_id', deviceId);
                 }
@@ -529,11 +654,9 @@
                         const user = JSON.parse(saved);
                         const deviceId = getDeviceId();
                         
-                        // ВАЖНО: проверяем, что это тот же device
                         if (user.deviceId === deviceId) {
                             currentUser = user;
                             
-                            // Устанавливаем выбранный аватар в селекторе
                             avatarOptions.forEach(opt => {
                                 opt.classList.remove('selected');
                                 if (opt.dataset.avatar === user.avatar) {
@@ -542,10 +665,7 @@
                             });
                             
                             usernameInput.value = user.name;
-                            
-                            // Флаг, что пользователь уже заходил
                             hasJoinedBefore = true;
-                            
                             return true;
                         }
                     } catch (e) {
@@ -553,6 +673,255 @@
                     }
                 }
                 return false;
+            }
+
+            // ==========  ПРОВЕРКА И СОЗДАНИЕ ТАБЛИЦЫ AUTH_CODES ==========
+            async function ensureAuthCodesTable() {
+                try {
+                    const { error } = await supabase
+                        .from('auth_codes')
+                        .select('count', { count: 'exact', head: true });
+                    
+                    if (error && error.code === '42P01') {
+                        console.log('%c⚠️ СОЗДАЙТЕ ТАБЛИЦУ В SUPABASE SQL EDITOR:', 'color: #ff9800; font-size: 16px');
+                        console.log(`CREATE TABLE auth_codes (
+                            id BIGSERIAL PRIMARY KEY,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                            code TEXT NOT NULL,
+                            user_id TEXT NOT NULL,
+                            user_name TEXT NOT NULL,
+                            user_avatar TEXT,
+                            device_id TEXT,
+                            expires_at TIMESTAMP WITH TIME ZONE NOT NULL
+                        );
+                        
+                        CREATE INDEX idx_auth_codes_code ON auth_codes(code);
+                        CREATE INDEX idx_auth_codes_expires ON auth_codes(expires_at);`);
+                        
+                        // Показываем уведомление в чате
+                        setTimeout(() => {
+                            if (messageContainer) {
+                                const warning = document.createElement('div');
+                                warning.style.cssText = `
+                                    background: #332200;
+                                    border: 1px solid #ff9800;
+                                    color: #ffb74d;
+                                    padding: 12px;
+                                    border-radius: 12px;
+                                    margin-bottom: 12px;
+                                    font-size: 14px;
+                                    text-align: center;
+                                `;
+                                warning.innerHTML = '⚠️ Создайте таблицу auth_codes в Supabase для переноса аккаунтов';
+                                messageContainer.prepend(warning);
+                            }
+                        }, 1000);
+                    }
+                } catch (e) {
+                    console.log('Auth table check:', e);
+                }
+            }
+
+            // ==========  ГЕНЕРАЦИЯ КОДА ПЕРЕНОСА ==========
+            async function generateAuthCode() {
+                const code = Math.floor(100000 + Math.random() * 900000).toString();
+                const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+                
+                const authData = {
+                    code: code,
+                    user_id: currentUser.id,
+                    user_name: currentUser.name,
+                    user_avatar: currentUser.avatar,
+                    device_id: currentUser.deviceId,
+                    expires_at: expiresAt
+                };
+                
+                try {
+                    const { error } = await supabase
+                        .from('auth_codes')
+                        .insert([authData]);
+                        
+                    if (error) {
+                        console.error('Ошибка сохранения кода:', error);
+                        return null;
+                    }
+                    
+                    return code;
+                } catch (e) {
+                    console.error('Ошибка генерации кода:', e);
+                    return null;
+                }
+            }
+
+            // ==========  ПРОВЕРКА КОДА ПЕРЕНОСА ==========
+            async function verifyAuthCode(code) {
+                try {
+                    const { data, error } = await supabase
+                        .from('auth_codes')
+                        .select('*')
+                        .eq('code', code)
+                        .gt('expires_at', new Date().toISOString())
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+                        
+                    if (error) throw error;
+                    
+                    if (data && data.length > 0) {
+                        const authData = data[0];
+                        
+                        // Получаем ID нового устройства
+                        const deviceId = getDeviceId();
+                        
+                        // Сохраняем пользователя с ТЕМ ЖЕ ID!
+                        currentUser = {
+                            id: authData.user_id,
+                            deviceId: deviceId,
+                            name: authData.user_name,
+                            avatar: authData.user_avatar,
+                            firstJoin: false
+                        };
+                        
+                        localStorage.setItem('tamsyam_user', JSON.stringify(currentUser));
+                        
+                        // Удаляем использованный код
+                        await supabase.from('auth_codes').delete().eq('code', code);
+                        
+                        return true;
+                    }
+                } catch (e) {
+                    console.error('Ошибка проверки кода:', e);
+                }
+                return false;
+            }
+
+            // ==========  ПОКАЗ МОДАЛЬНОГО ОКНА ПЕРЕНОСА ==========
+            function showAuthModal() {
+                // Удаляем старые модалки
+                const oldModal = document.querySelector('.modal-overlay');
+                if (oldModal) oldModal.remove();
+
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay';
+                
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-title">📱 Перенос аккаунта</div>
+                        
+                        <div id="authStep1">
+                            <p style="color: #8e8e93; margin-bottom: 20px;">
+                                На старом устройстве нажмите «Показать код»
+                            </p>
+                            <button id="showCodeBtn" class="modal-button">
+                                🔑 Показать код
+                            </button>
+                            <button id="enterCodeBtn" class="modal-button secondary">
+                                📲 Ввести код
+                            </button>
+                        </div>
+                        
+                        <div id="authStep2" style="display: none;">
+                            <input type="text" id="authCodeInput" class="code-input" 
+                                   maxlength="6" placeholder="000000" autofocus>
+                            <button id="verifyCodeBtn" class="modal-button">
+                                ✅ Подтвердить
+                            </button>
+                            <button id="backToStep1Btn" class="modal-button secondary">
+                                ← Назад
+                            </button>
+                        </div>
+                        
+                        <div id="authStep3" style="display: none; text-align: center;">
+                            <div style="margin-bottom: 8px; color: #8e8e93;">Ваш код:</div>
+                            <div id="generatedCodeDisplay" class="code-display">000000</div>
+                            <div id="timerDisplay" class="timer-text">05:00</div>
+                            <p style="color: #8e8e93; font-size: 14px; margin-bottom: 20px;">
+                                Введите этот код на новом устройстве
+                            </p>
+                            <button id="closeCodeBtn" class="modal-button secondary">
+                                ✕ Закрыть
+                            </button>
+                        </div>
+                        
+                        <button id="closeModalBtn" class="modal-close">
+                            Закрыть
+                        </button>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+                // Обработчики
+                document.getElementById('closeModalBtn').onclick = () => modal.remove();
+                
+                // Шаг 1: Показать код
+                document.getElementById('showCodeBtn').onclick = async () => {
+                    const code = await generateAuthCode();
+                    if (code) {
+                        document.getElementById('authStep1').style.display = 'none';
+                        document.getElementById('authStep3').style.display = 'block';
+                        document.getElementById('generatedCodeDisplay').textContent = code;
+                        
+                        // Таймер на 5 минут
+                        let timeLeft = 300;
+                        if (authCodeTimer) clearInterval(authCodeTimer);
+                        
+                        authCodeTimer = setInterval(() => {
+                            const minutes = Math.floor(timeLeft / 60);
+                            const seconds = timeLeft % 60;
+                            document.getElementById('timerDisplay').textContent = 
+                                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                            
+                            if (timeLeft <= 0) {
+                                clearInterval(authCodeTimer);
+                                document.getElementById('timerDisplay').style.color = '#ff6b6b';
+                                document.getElementById('timerDisplay').textContent = 'Код истек';
+                            }
+                            timeLeft--;
+                        }, 1000);
+                    }
+                };
+                
+                // Шаг 1: Ввести код
+                document.getElementById('enterCodeBtn').onclick = () => {
+                    document.getElementById('authStep1').style.display = 'none';
+                    document.getElementById('authStep2').style.display = 'block';
+                    document.getElementById('authCodeInput').focus();
+                };
+                
+                // Шаг 2: Назад
+                document.getElementById('backToStep1Btn').onclick = () => {
+                    document.getElementById('authStep2').style.display = 'none';
+                    document.getElementById('authStep1').style.display = 'block';
+                };
+                
+                // Шаг 2: Подтвердить код
+                document.getElementById('verifyCodeBtn').onclick = async () => {
+                    const code = document.getElementById('authCodeInput').value;
+                    if (code.length === 6) {
+                        const success = await verifyAuthCode(code);
+                        if (success) {
+                            alert('✅ Аккаунт перенесен! Чат перезагрузится.');
+                            modal.remove();
+                            location.reload();
+                        } else {
+                            alert('❌ Неверный или просроченный код');
+                        }
+                    }
+                };
+                
+                // Шаг 3: Закрыть
+                document.getElementById('closeCodeBtn').onclick = () => {
+                    if (authCodeTimer) clearInterval(authCodeTimer);
+                    modal.remove();
+                };
+                
+                // Ввод только цифр
+                const codeInput = document.getElementById('authCodeInput');
+                if (codeInput) {
+                    codeInput.addEventListener('input', (e) => {
+                        e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                    });
+                }
             }
 
             // ==========  ВХОД В ЧАТ ==========
@@ -567,37 +936,31 @@
                 const isFirstJoin = !hasJoinedBefore;
 
                 currentUser = {
-                    id: deviceId, // ВАЖНО: ID теперь постоянный!
+                    id: deviceId,
                     deviceId: deviceId,
                     name: username.trim(),
                     avatar: selectedAvatar,
                     firstJoin: isFirstJoin
                 };
 
-                // Сохраняем пользователя навсегда
                 localStorage.setItem('tamsyam_user', JSON.stringify(currentUser));
 
-                // Прячем логин, показываем чат
                 loginPrompt.classList.add('hidden');
                 chatApp.classList.remove('hidden');
 
-                // Устанавливаем имя и аватар в профиле
                 userNameDisplay.value = currentUser.name;
                 userAvatar.textContent = currentUser.avatar;
 
-                // Загружаем историю сообщений
                 await loadMessages();
-                
-                // Подписываемся на новые сообщения
                 subscribeToMessages();
-                
-                // Запускаем систему присутствия
                 startPresence();
                 
-                // Отправляем приветственное сообщение ТОЛЬКО если это первый вход
                 if (isFirstJoin) {
                     await sendSystemMessage('👋 ' + currentUser.name + ' присоединился к чату');
                 }
+                
+                // Проверяем наличие таблицы auth_codes
+                ensureAuthCodesTable();
             }
 
             // ==========  ЗАГРУЗКА СООБЩЕНИЙ ==========
@@ -614,7 +977,6 @@
                     if (data && data.length > 0) {
                         renderMessages(data);
                     } else {
-                        // Если сообщений нет, создаем демо
                         createDemoMessages();
                     }
                 } catch (error) {
@@ -645,7 +1007,7 @@
                 if (!text.trim()) return;
 
                 const message = {
-                    user_id: currentUser.id, // Постоянный ID!
+                    user_id: currentUser.id,
                     user_name: currentUser.name,
                     text: text.trim(),
                     avatar: currentUser.avatar,
@@ -693,7 +1055,6 @@
                 }
 
                 messages.forEach(msg => {
-                    // ВАЖНО: сравниваем с постоянным ID!
                     const isMe = msg.user_id === currentUser.id;
                     
                     const wrapper = document.createElement('div');
@@ -782,7 +1143,7 @@
                         
                         users.unshift(currentUser.name + ' (вы)');
                         onlineCountBadge.textContent = `${onlineUsers.size + 1} онлайн`;
-                        onlineUsersList.textContent = users.join(', ');
+                        onlineUsersList.textContent = users.slice(0, 5).join(', ') + (users.length > 5 ? ` и ещё ${users.length - 5}` : '');
                     })
                     .subscribe(async (status) => {
                         if (status === 'SUBSCRIBED') {
@@ -803,10 +1164,7 @@
                 const oldName = currentUser.name;
                 currentUser.name = newName.trim();
                 
-                // Сохраняем с новым именем
                 localStorage.setItem('tamsyam_user', JSON.stringify(currentUser));
-                
-                // Отправляем системное сообщение о смене имени
                 await sendSystemMessage(`✏️ ${oldName} теперь — ${currentUser.name}`);
             }
 
@@ -836,14 +1194,13 @@
                 changeName(e.target.value);
             });
 
+            authButton.addEventListener('click', showAuthModal);
+
             // ==========  СТАРТ ==========
-            // Пробуем загрузить сохраненного пользователя
             if (!loadSavedUser()) {
-                // Если нет сохраненного, показываем экран входа
                 loginPrompt.classList.remove('hidden');
                 chatApp.classList.add('hidden');
             } else {
-                // Если есть, сразу заходим в чат
                 joinChat(currentUser.name);
             }
         })();
