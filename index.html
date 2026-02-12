@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Там-Сям · общий чат для своих</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Стили полностью сохранены, как в предыдущей версии */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 12px;
+        }
+
+        .chat-app {
+            max-width: 800px;
+            width: 100%;
+            height: 90vh;
+            background: #0b0b0e;
+            border-radius: 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #2c2c2e;
+        }
+
+        .chat-header {
+            padding: 16px 20px;
+            background: #0e0e12;
+            border-bottom: 1px solid #2c2c2e;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, #2e2e33, #1c1c1e);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 600;
+            font-size: 18px;
+            margin-right: -8px;
+            border: 2px solid #0e0e12;
+        }
+
+        .chat-info {
+            flex: 1;
+        }
+
+        .chat-title {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .chat-name {
+            color: white;
+            font-weight: 650;
+            font-size: 19px;
+        }
+
+        .badge {
+            background: #3a3a3c;
+            padding: 4px 10px;
+            border-radius: 40px;
+            font-size: 11px;
+            color: #a9a9b0;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .members-count {
+            color: #8e8e93;
+            font-size: 14px;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .online-dot {
+            width: 6px;
+            height: 6px;
+            background: #5acf5a;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #1c1c1e;
+            padding: 6px 12px;
+            border-radius: 30px;
+            border: 0.5px solid #3a3a3c;
+        }
+
+        .user-avatar-small {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: #248bf5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-name-input {
+            background: #2c2c2e;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            max-width: 120px;
+            outline: none;
+            border: 0.5px solid #3a3a3c;
+        }
+
+        .user-name-input::placeholder {
+            color: #8e8e93;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #0b0b0e;
+            scroll-behavior: smooth;
+        }
+
+        .message-wrapper {
+            display: flex;
+            align-items: flex-end;
+            max-width: 85%;
+        }
+
+        .my-message {
+            align-self: flex-end;
+            justify-content: flex-end;
+        }
+
+        .other-message {
+            align-self: flex-start;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: #2a2a2e;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 600;
+            margin-right: 8px;
+            flex-shrink: 0;
+            text-transform: uppercase;
+            border: 1px solid #3a3a3c;
+        }
+
+        .message-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 22px;
+            font-size: 16px;
+            line-height: 1.45;
+            word-break: break-word;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            max-width: 100%;
+        }
+
+        .my-message .message-bubble {
+            background: #248bf5;
+            color: white;
+            border-bottom-right-radius: 6px;
+            border-top-right-radius: 22px;
+            border-bottom-left-radius: 22px;
+        }
+
+        .other-message .message-bubble {
+            background: #1c1c1e;
+            color: #f0f0f4;
+            border-bottom-left-radius: 6px;
+            border-top-left-radius: 22px;
+            border-bottom-right-radius: 22px;
+            border: 0.5px solid #3a3a3c;
+        }
+
+        .message-author {
+            font-size: 13px;
+            font-weight: 600;
+            color: #a9a9b0;
+            margin-bottom: 4px;
+            margin-left: 8px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #8e8e93;
+            margin-top: 4px;
+            margin-left: 8px;
+        }
+
+        .my-message .message-time {
+            text-align: right;
+            margin-right: 4px;
+        }
+
+        .input-area {
+            background: #0e0e12;
+            border-top: 1px solid #2c2c2e;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .message-input {
+            flex: 1;
+            background: #1c1c1e;
+            border: 0.5px solid #3a3a3c;
+            border-radius: 30px;
+            padding: 12px 20px;
+            font-size: 16px;
+            color: white;
+            outline: none;
+        }
+
+        .message-input::placeholder {
+            color: #636366;
+        }
+
+        .send-button {
+            background: #248bf5;
+            border: none;
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .send-button:active {
+            background: #1a7ad3;
+            transform: scale(0.96);
+        }
+
+        .login-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .login-card {
+            background: #1c1c1e;
+            padding: 32px;
+            border-radius: 28px;
+            width: 90%;
+            max-width: 360px;
+            border: 1px solid #3a3a3c;
+        }
+
+        .login-title {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .login-sub {
+            color: #8e8e93;
+            margin-bottom: 24px;
+            font-size: 15px;
+        }
+
+        .login-input {
+            width: 100%;
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+            padding: 16px;
+            border-radius: 18px;
+            color: white;
+            font-size: 16px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        .login-input:focus {
+            border-color: #248bf5;
+        }
+
+        .avatar-selector {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .avatar-option {
+            aspect-ratio: 1;
+            background: #2c2c2e;
+            border: 2px solid #3a3a3c;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .avatar-option.selected {
+            border-color: #248bf5;
+            background: #1a4a7a;
+            transform: scale(0.95);
+        }
+
+        .login-button {
+            background: #248bf5;
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 18px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .login-button:hover {
+            background: #1a7ad3;
+        }
+
+        .footer-note {
+            color: #48484a;
+            font-size: 10px;
+            text-align: center;
+            padding: 8px 0;
+            background: #0b0b0e;
+            border-top: 0.5px solid #1c1c1e;
+        }
+        .footer-note span {
+            color: #5acf5a;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Экран входа с выбором аватарки -->
+    <div id="loginPrompt" class="login-prompt">
+        <div class="login-card">
+            <div class="login-title">Там‑Сям</div>
+            <div class="login-sub">Выберите аватар и введите имя</div>
+            
+            <!-- Селектор аватарок -->
+            <div class="avatar-selector" id="avatarSelector">
+                <div class="avatar-option selected" data-avatar="😎">😎</div>
+                <div class="avatar-option" data-avatar="🌸">🌸</div>
+                <div class="avatar-option" data-avatar="🐨">🐨</div>
+                <div class="avatar-option" data-avatar="🦊">🦊</div>
+                <div class="avatar-option" data-avatar="👾">👾</div>
+                <div class="avatar-option" data-avatar="🌟">🌟</div>
+                <div class="avatar-option" data-avatar="🎸">🎸</div>
+                <div class="avatar-option" data-avatar="📱">📱</div>
+                <div class="avatar-option" data-avatar="✨">✨</div>
+                <div class="avatar-option" data-avatar="🌈">🌈</div>
+                <div class="avatar-option" data-avatar="🐧">🐧</div>
+                <div class="avatar-option" data-avatar="🦉">🦉</div>
+            </div>
+            
+            <input type="text" id="usernameInput" class="login-input" placeholder="Ваше имя" maxlength="20">
+            <button id="enterChatBtn" class="login-button">Войти в чат →</button>
+            <div style="color: #8e8e93; font-size: 12px; margin-top: 16px; text-align: center;">
+                ⚡️ Один общий диалог навсегда
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-app hidden" id="chatApp">
+        <div class="chat-header">
+            <div class="avatar-group">
+                <div class="avatar">👥</div>
+                <div class="avatar" style="background: #35353a;">✨</div>
+            </div>
+            <div class="chat-info">
+                <div class="chat-title">
+                    <span class="chat-name">Там‑Сям</span>
+                    <span class="badge" id="onlineCountBadge">0 онлайн</span>
+                </div>
+                <div class="members-count">
+                    <span class="online-dot"></span> 
+                    <span id="onlineUsersList">загрузка...</span>
+                </div>
+            </div>
+            <div class="user-profile">
+                <div class="user-avatar-small" id="userAvatar">👤</div>
+                <input type="text" id="userNameDisplay" class="user-name-input" maxlength="20" placeholder="Ваше имя">
+            </div>
+        </div>
+
+        <div class="messages-container" id="messageContainer"></div>
+
+        <div class="input-area">
+            <input type="text" class="message-input" id="messageInput" placeholder="Написать в Там-Сям..." autofocus>
+            <button class="send-button" id="sendBtn">➤</button>
+        </div>
+        <div class="footer-note">
+            <span>●</span> общий чат без телеграма <span>●</span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ==========  SUPABASE ==========
+            const SUPABASE_URL = 'https://qnzxhgmsrqgqgejqygcg.supabase.co';
+            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuenhoZ21zcnFncWdlanF5Z2NnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MzExMzEsImV4cCI6MjA4NjQwNzEzMX0.LdVuDnttpnm340KZBWu6zJ6T1TAWLgWAlIRrEMSwTcY';
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+            // ==========  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+            let currentUser = {
+                id: null,        // постоянный ID на основе устройства
+                name: '',
+                avatar: '😎',
+                firstJoin: false // был ли уже в чате
+            };
+
+            let onlineUsers = new Map();
+            let messagesSubscription = null;
+            let hasJoinedBefore = false; // флаг, чтобы не спамить "присоединился"
+
+            // ==========  ЭЛЕМЕНТЫ DOM ==========
+            const loginPrompt = document.getElementById('loginPrompt');
+            const chatApp = document.getElementById('chatApp');
+            const usernameInput = document.getElementById('usernameInput');
+            const enterChatBtn = document.getElementById('enterChatBtn');
+            const avatarSelector = document.getElementById('avatarSelector');
+            const avatarOptions = document.querySelectorAll('.avatar-option');
+            const messageContainer = document.getElementById('messageContainer');
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const userNameDisplay = document.getElementById('userNameDisplay');
+            const userAvatar = document.getElementById('userAvatar');
+            const onlineCountBadge = document.getElementById('onlineCountBadge');
+            const onlineUsersList = document.getElementById('onlineUsersList');
+
+            // ==========  ГЕНЕРАЦИЯ ПОСТОЯННОГО ID ==========
+            function getDeviceId() {
+                let deviceId = localStorage.getItem('tamsyam_device_id');
+                if (!deviceId) {
+                    // Создаем настоящий постоянный ID
+                    deviceId = 'device_' + Math.random().toString(36).substring(2) + Date.now();
+                    localStorage.setItem('tamsyam_device_id', deviceId);
+                }
+                return deviceId;
+            }
+
+            // ==========  ВЫБОР АВАТАРКИ ==========
+            avatarOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    avatarOptions.forEach(opt => opt.classList.remove('selected'));
+                    option.classList.add('selected');
+                });
+            });
+
+            // ==========  ПОЛУЧИТЬ ВЫБРАННЫЙ АВАТАР ==========
+            function getSelectedAvatar() {
+                const selected = document.querySelector('.avatar-option.selected');
+                return selected ? selected.dataset.avatar : '😎';
+            }
+
+            // ==========  ЗАГРУЗКА СОХРАНЕННОГО ПОЛЬЗОВАТЕЛЯ ==========
+            function loadSavedUser() {
+                const saved = localStorage.getItem('tamsyam_user');
+                if (saved) {
+                    try {
+                        const user = JSON.parse(saved);
+                        const deviceId = getDeviceId();
+                        
+                        // ВАЖНО: проверяем, что это тот же device
+                        if (user.deviceId === deviceId) {
+                            currentUser = user;
+                            
+                            // Устанавливаем выбранный аватар в селекторе
+                            avatarOptions.forEach(opt => {
+                                opt.classList.remove('selected');
+                                if (opt.dataset.avatar === user.avatar) {
+                                    opt.classList.add('selected');
+                                }
+                            });
+                            
+                            usernameInput.value = user.name;
+                            
+                            // Флаг, что пользователь уже заходил
+                            hasJoinedBefore = true;
+                            
+                            return true;
+                        }
+                    } catch (e) {
+                        console.log('Ошибка загрузки пользователя');
+                    }
+                }
+                return false;
+            }
+
+            // ==========  ВХОД В ЧАТ ==========
+            async function joinChat(username) {
+                if (!username.trim()) {
+                    alert('Введите имя');
+                    return;
+                }
+
+                const deviceId = getDeviceId();
+                const selectedAvatar = getSelectedAvatar();
+                const isFirstJoin = !hasJoinedBefore;
+
+                currentUser = {
+                    id: deviceId, // ВАЖНО: ID теперь постоянный!
+                    deviceId: deviceId,
+                    name: username.trim(),
+                    avatar: selectedAvatar,
+                    firstJoin: isFirstJoin
+                };
+
+                // Сохраняем пользователя навсегда
+                localStorage.setItem('tamsyam_user', JSON.stringify(currentUser));
+
+                // Прячем логин, показываем чат
+                loginPrompt.classList.add('hidden');
+                chatApp.classList.remove('hidden');
+
+                // Устанавливаем имя и аватар в профиле
+                userNameDisplay.value = currentUser.name;
+                userAvatar.textContent = currentUser.avatar;
+
+                // Загружаем историю сообщений
+                await loadMessages();
+                
+                // Подписываемся на новые сообщения
+                subscribeToMessages();
+                
+                // Запускаем систему присутствия
+                startPresence();
+                
+                // Отправляем приветственное сообщение ТОЛЬКО если это первый вход
+                if (isFirstJoin) {
+                    await sendSystemMessage('👋 ' + currentUser.name + ' присоединился к чату');
+                }
+            }
+
+            // ==========  ЗАГРУЗКА СООБЩЕНИЙ ==========
+            async function loadMessages() {
+                try {
+                    const { data, error } = await supabase
+                        .from('messages')
+                        .select('*')
+                        .order('created_at', { ascending: true })
+                        .limit(100);
+
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        renderMessages(data);
+                    } else {
+                        // Если сообщений нет, создаем демо
+                        createDemoMessages();
+                    }
+                } catch (error) {
+                    console.error('Ошибка загрузки:', error);
+                    createDemoMessages();
+                }
+            }
+
+            // ==========  ДЕМО-СООБЩЕНИЯ ==========
+            async function createDemoMessages() {
+                const demoMessages = [
+                    { user_id: 'demo1', user_name: 'Саша', text: 'Народ, а телеграм опять тормозит 🐢', avatar: '😎', created_at: new Date(Date.now() - 3600000).toISOString() },
+                    { user_id: 'demo2', user_name: 'Аня', text: 'давайте сюда писать, пока не починят', avatar: '🌸', created_at: new Date(Date.now() - 3500000).toISOString() },
+                    { user_id: 'demo3', user_name: 'Коля', text: 'а где ссылку дали? я только зашёл', avatar: '🐨', created_at: new Date(Date.now() - 3400000).toISOString() }
+                ];
+
+                try {
+                    await supabase.from('messages').insert(demoMessages);
+                } catch (e) {
+                    console.log('Демо-сообщения не сохранены');
+                }
+
+                renderMessages(demoMessages);
+            }
+
+            // ==========  ОТПРАВКА СООБЩЕНИЯ ==========
+            async function sendMessage(text) {
+                if (!text.trim()) return;
+
+                const message = {
+                    user_id: currentUser.id, // Постоянный ID!
+                    user_name: currentUser.name,
+                    text: text.trim(),
+                    avatar: currentUser.avatar,
+                    created_at: new Date().toISOString()
+                };
+
+                try {
+                    const { error } = await supabase
+                        .from('messages')
+                        .insert([message]);
+
+                    if (error) {
+                        console.error('Ошибка отправки:', error);
+                    }
+
+                    messageInput.value = '';
+                } catch (error) {
+                    console.error('Ошибка:', error);
+                }
+            }
+
+            // ==========  СИСТЕМНОЕ СООБЩЕНИЕ ==========
+            async function sendSystemMessage(text) {
+                const message = {
+                    user_id: 'system_' + Date.now(),
+                    user_name: 'Там-Сям',
+                    text: text,
+                    avatar: '📬',
+                    created_at: new Date().toISOString()
+                };
+
+                try {
+                    await supabase.from('messages').insert([message]);
+                } catch (e) {
+                    console.log('Системное сообщение не сохранено');
+                }
+            }
+
+            // ==========  ОТРИСОВКА СООБЩЕНИЙ ==========
+            function renderMessages(messages, append = false) {
+                if (!messageContainer) return;
+
+                if (!append) {
+                    messageContainer.innerHTML = '';
+                }
+
+                messages.forEach(msg => {
+                    // ВАЖНО: сравниваем с постоянным ID!
+                    const isMe = msg.user_id === currentUser.id;
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = `message-wrapper ${isMe ? 'my-message' : 'other-message'}`;
+
+                    if (!isMe && msg.user_name !== 'Там-Сям') {
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = 'message-avatar';
+                        avatarDiv.textContent = msg.avatar || '👤';
+                        wrapper.appendChild(avatarDiv);
+                    }
+
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'message-content';
+
+                    if (!isMe && msg.user_name) {
+                        const authorSpan = document.createElement('span');
+                        authorSpan.className = 'message-author';
+                        authorSpan.textContent = msg.user_name;
+                        contentDiv.appendChild(authorSpan);
+                    }
+
+                    const bubble = document.createElement('div');
+                    bubble.className = 'message-bubble';
+                    bubble.textContent = msg.text;
+                    contentDiv.appendChild(bubble);
+
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'message-time';
+                    const time = msg.created_at ? new Date(msg.created_at) : new Date();
+                    timeSpan.textContent = time.getHours().toString().padStart(2, '0') + ':' + 
+                                         time.getMinutes().toString().padStart(2, '0');
+                    contentDiv.appendChild(timeSpan);
+
+                    wrapper.appendChild(contentDiv);
+                    messageContainer.appendChild(wrapper);
+                });
+
+                messageContainer.scrollTop = messageContainer.scrollHeight;
+            }
+
+            // ==========  REALTIME ==========
+            function subscribeToMessages() {
+                if (messagesSubscription) {
+                    messagesSubscription.unsubscribe();
+                }
+
+                messagesSubscription = supabase
+                    .channel('messages_channel')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: 'INSERT',
+                            schema: 'public',
+                            table: 'messages'
+                        },
+                        (payload) => {
+                            const newMessage = payload.new;
+                            renderMessages([newMessage], true);
+                        }
+                    )
+                    .subscribe();
+            }
+
+            // ==========  ПРИСУТСТВИЕ ==========
+            function startPresence() {
+                const presenceChannel = supabase.channel('presence_channel', {
+                    config: {
+                        presence: {
+                            key: currentUser.id,
+                        },
+                    },
+                });
+
+                presenceChannel
+                    .on('presence', { event: 'sync' }, () => {
+                        const state = presenceChannel.presenceState();
+                        const users = [];
+                        Object.keys(state).forEach(key => {
+                            const userData = state[key][0];
+                            if (userData && userData.user_id !== currentUser.id) {
+                                users.push(userData.user_name);
+                                onlineUsers.set(userData.user_id, userData);
+                            }
+                        });
+                        
+                        users.unshift(currentUser.name + ' (вы)');
+                        onlineCountBadge.textContent = `${onlineUsers.size + 1} онлайн`;
+                        onlineUsersList.textContent = users.join(', ');
+                    })
+                    .subscribe(async (status) => {
+                        if (status === 'SUBSCRIBED') {
+                            await presenceChannel.track({
+                                user_id: currentUser.id,
+                                user_name: currentUser.name,
+                                avatar: currentUser.avatar,
+                                online_at: new Date().toISOString(),
+                            });
+                        }
+                    });
+            }
+
+            // ==========  СМЕНА ИМЕНИ ==========
+            async function changeName(newName) {
+                if (!newName.trim() || newName === currentUser.name) return;
+                
+                const oldName = currentUser.name;
+                currentUser.name = newName.trim();
+                
+                // Сохраняем с новым именем
+                localStorage.setItem('tamsyam_user', JSON.stringify(currentUser));
+                
+                // Отправляем системное сообщение о смене имени
+                await sendSystemMessage(`✏️ ${oldName} теперь — ${currentUser.name}`);
+            }
+
+            // ==========  ОБРАБОТЧИКИ ==========
+            enterChatBtn.addEventListener('click', () => {
+                joinChat(usernameInput.value);
+            });
+
+            usernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    joinChat(usernameInput.value);
+                }
+            });
+
+            sendBtn.addEventListener('click', () => {
+                sendMessage(messageInput.value);
+            });
+
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendMessage(messageInput.value);
+                }
+            });
+
+            userNameDisplay.addEventListener('change', (e) => {
+                changeName(e.target.value);
+            });
+
+            // ==========  СТАРТ ==========
+            // Пробуем загрузить сохраненного пользователя
+            if (!loadSavedUser()) {
+                // Если нет сохраненного, показываем экран входа
+                loginPrompt.classList.remove('hidden');
+                chatApp.classList.add('hidden');
+            } else {
+                // Если есть, сразу заходим в чат
+                joinChat(currentUser.name);
+            }
+        })();
+    </script>
+</body>
+</html>
