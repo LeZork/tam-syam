@@ -1033,6 +1033,10 @@
             // ==========  ПЕРЕМЕННЫЕ ДЛЯ ФОТО ==========
             let photoUploadCanceled = false;
 
+            // ==========  ПЕРЕМЕННЫЕ ДЛЯ ВИДЕО ==========
+            let videoUploadCanceled = false;
+            let videoUploadProgress = null; // Добавьте элемент в HTML
+
             // ==========  ЭЛЕМЕНТЫ DOM ==========
             const loginPrompt = document.getElementById('loginPrompt');
             const chatApp = document.getElementById('chatApp');
@@ -1053,6 +1057,12 @@
             const recordingIndicator = document.getElementById('recordingIndicator');
             const recordingTimer = document.getElementById('recordingTimer');
             const cancelRecordingBtn = document.getElementById('cancelRecordingBtn');
+            const attachBtn = document.getElementById('attachBtn');
+            const attachDropdown = document.getElementById('attachDropdown');
+            const videoInput = document.getElementById('videoInput');
+            const photoOption = document.getElementById('photoOption');
+            const videoOption = document.getElementById('videoOption');
+            const voiceOption = document.getElementById('voiceOption');
             
             // Новые элементы для фото
             const photoBtn = document.getElementById('photoBtn');
@@ -1436,6 +1446,7 @@
                     console.error('Ошибка:', error);
                 }
             }
+            
 
             // ==========  ОТПРАВКА ФОТО ==========
             async function sendPhoto(file) {
@@ -1498,6 +1509,80 @@
                         if (error) {
                             console.error('Ошибка отправки фото:', error);
                             alert('❌ Не удалось отправить фото');
+                        }
+                    } catch (error) {
+                        console.error('Ошибка:', error);
+                    } finally {
+                        setTimeout(() => {
+                            photoUploadProgress.classList.add('hidden');
+                            photoProgressFill.style.width = '0%';
+                        }, 500);
+                    }
+                };
+            }
+
+            // ==========  ОТПРАВКА ВИДЕО ==========
+            async function sendVideo(file) {
+                if (!file) return;
+    
+                if (file.size > 50 * 1024 * 1024) {
+                    alert('❌ Файл слишком большой. Максимальный размер - 50MB');
+                    return;
+                }
+
+                if (!file.type.startsWith('video/')) {
+                    alert('❌ Пожалуйста, выберите видео');
+                    return;
+                }
+
+                // Показываем прогресс загрузки (можно использовать photoUploadProgress)
+                photoUploadProgress.classList.remove('hidden');
+                photoProgressFill.style.width = '0%';
+                videoUploadCanceled = false;
+
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+    
+                reader.onloadstart = () => {
+                    photoProgressFill.style.width = '30%';
+                };
+    
+                reader.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 70 + 30;
+                        photoProgressFill.style.width = percent + '%';
+                    }
+                };
+    
+                reader.onloadend = async () => {
+                    if (videoUploadCanceled) {
+                        photoUploadProgress.classList.add('hidden');
+                        return;
+                    }
+        
+                    photoProgressFill.style.width = '100%';
+        
+                    const base64Video = reader.result;
+        
+                    const message = {
+                        user_id: currentUser.id,
+                        user_name: currentUser.name,
+                        text: `🎥 Видео`,
+                        avatar: currentUser.avatar,
+                        video: base64Video,
+                                video_name: file.name,
+                        video_size: file.size,
+                        created_at: new Date().toISOString()
+                    };
+
+                    try {
+                        const { error } = await supabase
+                            .from('messages')
+                            .insert([message]);
+
+                        if (error) {
+                            console.error('Ошибка отправки видео:', error);
+                            alert('❌ Не удалось отправить видео');
                         }
                     } catch (error) {
                         console.error('Ошибка:', error);
@@ -1763,7 +1848,23 @@
                         
                         photoContainer.appendChild(img);
                         contentDiv.appendChild(photoContainer);
-                    } 
+                    }
+                    // ВИДЕО СООБЩЕНИЯ 
+                    else if (msg.video) {
+                        const videoContainer = document.createElement('div');
+                        videoContainer.className = 'photo-message'; // Используем тот же стиль
+                        videoContainer.style.position = 'relative';
+    
+                        const video = document.createElement('video');
+                        video.src = msg.video;
+                        video.controls = true;
+                        video.preload = 'metadata';
+                        video.style.width = '100%';
+                        video.style.borderRadius = '18px';
+    
+                        videoContainer.appendChild(video);
+                        contentDiv.appendChild(videoContainer);
+                    }
                     // ГОЛОСОВОЕ СООБЩЕНИЕ
                     else if (msg.voice) {
                         const voiceContainer = document.createElement('div');
@@ -2043,6 +2144,94 @@
 
             if (cancelRecordingBtn) {
                 cancelRecordingBtn.addEventListener('click', cancelRecording);
+            }
+
+            // ==========  ОБРАБОТЧИКИ DROPDOWN ==========
+            if (attachBtn) {
+                attachBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    attachDropdown.classList.toggle('hidden');
+                });
+            }
+
+            // Закрыть dropdown при клике вне
+            document.addEventListener('click', (e) => {
+                if (attachDropdown && !attachDropdown.contains(e.target) && e.target !== attachBtn) {
+                    attachDropdown.classList.add('hidden');
+                }
+            });
+
+            // Обработчики опций
+            if (photoOption) {
+                photoOption.addEventListener('click', () => {
+                    attachDropdown.classList.add('hidden');
+                    photoInput.click();
+                });
+            }
+
+            if (videoOption) {
+                videoOption.addEventListener('click', () => {
+                    attachDropdown.classList.add('hidden');
+                    videoInput.click();
+                });
+            }
+
+            if (voiceOption) {
+                // Для голосовых - долгое нажатие
+                let pressTimer = null;
+                let isPressed = false;
+    
+                voiceOption.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    isPressed = true;
+                    pressTimer = setTimeout(() => {
+                        if (isPressed) {
+                            attachDropdown.classList.add('hidden');
+                            startRecording();
+                        }
+                    }, 300);
+                });
+    
+                voiceOption.addEventListener('mouseup', () => {
+                    isPressed = false;
+                    if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                });
+    
+                voiceOption.addEventListener('mouseleave', () => {
+                    isPressed = false;
+                    if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                });
+    
+                // Для touch-устройств
+                voiceOption.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    attachDropdown.classList.add('hidden');
+                    startRecording();
+                });
+    
+                voiceOption.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopRecording();
+                    }
+                });
+            }
+
+            // Обработчик video input
+            if (videoInput) {
+                videoInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        sendVideo(file);
+                    }
+                    videoInput.value = '';
+                });
             }
 
             // ==========  СТАРТ ==========
