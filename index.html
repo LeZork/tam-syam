@@ -364,7 +364,7 @@
 
         .attach-dropdown {
             position: absolute;
-            bottom: 80px;
+            bottom: calc(80px + env(safe-area-inset-bottom, 0px));
             left: 16px;
             background: #1c1c1e;
             border: 1px solid #3a3a3c;
@@ -423,7 +423,7 @@
 
         .emoji-picker {
             position: absolute;
-            bottom: 90px;
+            bottom: calc(90px + env(safe-area-inset-bottom, 0px));
             left: 20px;
             background: #1c1c1e;
             border: 1px solid #3a3a3c;
@@ -475,7 +475,7 @@
 
         .recording-indicator {
             position: absolute;
-            bottom: 100px;
+            bottom: calc(100px + env(safe-area-inset-bottom, 0px));
             left: 20px;
             right: 20px;
             background: #1c1c1e;
@@ -631,7 +631,7 @@
 
         .photo-upload-progress {
             position: absolute;
-            bottom: 100px;
+            bottom: calc(100px + env(safe-area-inset-bottom, 0px));
             left: 20px;
             right: 20px;
             background: #1c1c1e;
